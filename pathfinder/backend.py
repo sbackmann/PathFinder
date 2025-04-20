@@ -12,13 +12,14 @@ class PathFinder:
     token_in = 0
     token_out = 0
 
-    def __init__(self, model_name) -> None:
-        self.model_name = model_name
+    def __init__(self, model_name: str) -> None:
+        self.model_name: str = model_name
         self._variables = {}
         self.chat = []
 
-        self.prefix_text = ""
-        self.text_to_consume = ""
+        self.prefix_text: str = ""
+        self.text_to_consume: str = ""
+        self.reasoning: str = ""
 
     def _current_prompt(self):
         raise NotImplementedError

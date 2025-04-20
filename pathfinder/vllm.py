@@ -23,7 +23,7 @@ from ._find import Find
 from ._gen import Gen
 from ._select import Select
 from .backend import PathFinder
-from .templates import LLAMA_CHAT_TEMPLATE
+# from .templates import LLAMA_CHAT_TEMPLATE
 from .trie import MarisaTrie, Trie
 
 
@@ -51,6 +51,7 @@ class ModelVLLMBackend(PathFinder):
             gpu_memory_utilization=0.9,
             tensor_parallel_size=num_gpus,
             seed=seed,
+            max_model_len=106480,
         )
         self.template = template
         self.tokenizer = tokenizer
@@ -120,7 +121,7 @@ class ModelVLLMBackend(PathFinder):
             lm._variables[name] = res
             return res, original_res
         else:
-            raise Exception(f"Regex {r} not found in {lm.text_to_consume}")
+            raise ValueError(f"Regex {r} not found in {lm.text_to_consume}")
 
     def run(self, lm, r, name, is_gen, save_stop_text):
         if lm.text_to_consume == "":
@@ -146,7 +147,7 @@ class ModelVLLMBackend(PathFinder):
             res = lm.text_to_consume
             lm.text_to_consume = ""
         else:
-            raise Exception(f"Cant find {r} in {lm.text_to_consume}")
+            raise ValueError(f"Cant find {r} in {lm.text_to_consume}")
         return res
 
     def _format_prompt(self):

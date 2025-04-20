@@ -1,5 +1,6 @@
 import copy
 import logging
+from os import getenv
 from time import sleep
 from typing import Any
 
@@ -13,6 +14,7 @@ from .backend import PathFinder
 from .model import Model
 from .trie import MarisaTrie, Trie
 
+logger = logging.getLogger(__name__)
 
 def can_be_int(s):
     try:
@@ -26,16 +28,16 @@ class ModelAPI(PathFinder):
     token_in = 0
     token_out = 0
 
-    def __init__(self, model_name, seed, api_assistant=True) -> None:
+    def __init__(self, model_name: str, seed: int, api_assistant: bool = True) -> None:
         super().__init__(model_name)
 
-        self.temperature = 0.0
-        self.top_p = 1.0
-        self.max_tokens = 1000
-        self.seed = seed
+        self.temperature: float = 0.0
+        self.top_p: float = 1.0
+        self.max_tokens: int = 1000
+        self.seed: int = seed
 
-        self.prefix_text = ""
-        self.api_assistant = api_assistant
+        self.prefix_text: str = ""
+        self.api_assistant: bool = api_assistant
 
     def _current_prompt(self):
         if isinstance(self.chat, list):
@@ -93,14 +95,14 @@ class ModelAPI(PathFinder):
                 else lm.chat
             )
             if self.api_assistant:
-                lm.text_to_consume = self.request_api(
+                lm.text_to_consume, self.reasoning = self.request_api(
                     tmp_chat, lm.temperature, lm.top_p, lm.max_tokens
                 )
             else:
                 tmp_chat = (
                     tmp_chat[:-1] if tmp_chat[-1]["role"] == "assistant" else tmp_chat
                 )
-                lm.text_to_consume = self.request_api(
+                lm.text_to_consume, self.reasoning = self.request_api(
                     tmp_chat, lm.temperature, lm.top_p, lm.max_tokens
                 )
                 match = regex.match(
@@ -119,7 +121,7 @@ class ModelAPI(PathFinder):
             lm._variables[name] = res
             return res, original_res
         else:
-            raise Exception(f"Regex {r} not found in {lm.text_to_consume}")
+            raise ValueError(f"Regex {r} not found in {lm.text_to_consume}")
 
     def run(self, lm, r, name, is_gen, save_stop_text):
         if lm.text_to_consume == "":
@@ -129,14 +131,14 @@ class ModelAPI(PathFinder):
                 else lm.chat
             )
             if self.api_assistant:
-                lm.text_to_consume = self.request_api(
+                lm.text_to_consume, self.reasoning = self.request_api(
                     tmp_chat, lm.temperature, lm.top_p, lm.max_tokens
                 )
             else:
                 tmp_chat = (
                     tmp_chat[:-1] if tmp_chat[-1]["role"] == "assistant" else tmp_chat
                 )
-                lm.text_to_consume = self.request_api(
+                lm.text_to_consume, self.reasoning = self.request_api(
                     tmp_chat, lm.temperature, lm.top_p, lm.max_tokens
                 )
                 match = regex.match(
@@ -173,7 +175,7 @@ class ModelAPI(PathFinder):
             res = lm.text_to_consume
             lm.text_to_consume = ""
         else:
-            raise Exception(f"Cant find {r} in {lm.text_to_consume}")
+            raise ValueError(f"Cant find {r} in {lm.text_to_consume}")
         return res
 
 
@@ -199,28 +201,38 @@ class OpenAIAPI(ModelAPI):
             seed=self.seed,
             max_tokens=max_tokens,
         )
-        logging.info(f"OpenAI system_fingerprint: {out.system_fingerprint}")
-        return out.choices[0].message.content
+        logger.info(f"OpenAI system_fingerprint: {out.system_fingerprint}")
+        return out.choices[0].message.content, ""
 
+API_KEYS = ["OPENROUTER_API_KEY", "OPENROUTER_API_KEY_1", "OPENROUTER_API_KEY_2", "OPENROUTER_API_KEY_3"]
 
 class OpenRouter(ModelAPI):
     def __init__(self, model_name, seed):
         super().__init__(model_name, seed)
-        from os import getenv
-
         from openai import OpenAI
 
         self.client = OpenAI(
             base_url="https://openrouter.ai/api/v1",
-            api_key=getenv("OPENROUTER_API_KEY"),
+            api_key=getenv(API_KEYS.pop(0)),
         )
 
     def request_api(self, chat, tmeperature, top_p, max_tokens):
         import openai
-
         @backoff.on_exception(backoff.expo, openai.RateLimitError)
         def completions_with_backoff(**kwargs):
-            return self.client.chat.completions.create(**kwargs)
+            out = self.client.chat.completions.create(**kwargs)
+            logger.debug(f"Out: {out}")
+            while out.choices is None:
+                msg = out.error["message"].lower()
+                if "free-models-per-min" in msg or "provider returned error" in msg:
+                    sleep(60)
+                elif len(API_KEYS) > 0:
+                    logger.debug("Switching openrouter API_KEY")
+                    self.client.api_key = getenv(API_KEYS.pop(0))
+                else:
+                    raise ConnectionRefusedError(msg)
+                out = self.client.chat.completions.create(**kwargs)
+            return out
 
         out = completions_with_backoff(
             model=self.model_name,
@@ -230,8 +242,10 @@ class OpenRouter(ModelAPI):
             seed=self.seed,
             max_tokens=max_tokens,
         )
-        logging.info(f"OpenAI system_fingerprint: {out.system_fingerprint}")
-        return out.choices[0].message.content
+        logger.info(f"OpenAI system_fingerprint: {out.system_fingerprint}")
+        content = out.choices[0].message.content
+        reasoning = out.choices[0].message.reasoning if hasattr(out.choices[0].message, "reasoning") else "" 
+        return content, reasoning
 
 
 import json
@@ -304,7 +318,7 @@ class AzureOpenAIAPI(ModelAPI):
             seed=self.seed,
             max_tokens=max_tokens,
         )
-        logging.info(f"OpenAI system_fingerprint: {out.system_fingerprint}")
+        logger.info(f"OpenAI system_fingerprint: {out.system_fingerprint}")
 
         self.token_in = out.usage.prompt_tokens
         self.token_out = out.usage.completion_tokens
@@ -313,7 +327,7 @@ class AzureOpenAIAPI(ModelAPI):
             self.token_in, self.token_out, self.model_name, self.random_name
         )
 
-        return out.choices[0].message.content
+        return out.choices[0].message.content, ""
 
 
 import os
@@ -382,7 +396,7 @@ class MistralAPI(ModelAPI):
             random_seed=self.seed,
             max_tokens=max_tokens,
         )
-        return out.choices[0].message.content
+        return out.choices[0].message.content, ""
 
 
 class AnthropicAPI(ModelAPI):
@@ -411,4 +425,4 @@ class AnthropicAPI(ModelAPI):
             top_p=top_p,
             max_tokens=max_tokens,
         )
-        return out.content[0].text
+        return out.content[0].text, ""

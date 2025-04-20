@@ -1,6 +1,7 @@
 import copy
 from typing import Any
 
+import logging
 import numpy as np
 import pygtrie
 import regex
@@ -23,6 +24,7 @@ from ._gen import Gen
 from ._select import Select
 from .trie import MarisaTrie, Trie
 
+logger = logging.getLogger(__name__)
 
 class RegexStoppingCriteria(StoppingCriteria):
     def __init__(self, stop_pattern, decode, prefix_length):
@@ -273,7 +275,7 @@ class Model(PathFinder):
         if match:
             res = match.group(0)
         else:
-            raise Exception(f"Regex {value.regex} not found in {original_res}")
+            raise ValueError(f"Regex {value.regex} not found in {original_res}")
         self.token_in = len(input_ids[0])
         self.token_out = len(output[0]) - len(input_ids[0])
         return res, original_res
@@ -287,8 +289,12 @@ class Model(PathFinder):
         eos_token_id = model_config.eos_token_id
         if eos_token_id is None:
             eos_token_id = self.tokenizer.eos_token_id
+        # if pad_token_id is None:
+        #     pad_token_id = eos_token_id
         if pad_token_id is None:
-            pad_token_id = eos_token_id
+            pad_token_id = (
+                eos_token_id[0] if isinstance(eos_token_id, list) else eos_token_id
+            )
 
         generation_config = GenerationConfig(
             pad_token_id=pad_token_id,
