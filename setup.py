@@ -7,6 +7,7 @@ setup(
     name="pathfinder",
     version="0.1.0",
     packages=find_packages(exclude=["tests*"]),
+    package_dir={"": "."},
     license="MIT",
     description="A package for LLM-querying and output parsing.",
     long_description=long_description,

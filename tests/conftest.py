@@ -1,5 +1,5 @@
 import pytest
-from pathfinder.pathfinder import LlamaChat, PathFinderModel
+from pathfinder import LlamaChat, PathFinderModel
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 
