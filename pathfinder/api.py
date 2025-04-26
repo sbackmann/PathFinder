@@ -251,6 +251,21 @@ class OpenRouter(ModelAPI):
 import json
 import os
 
+class TokenCounter:
+    total_in = 0
+    total_out = 0
+    total_cost = 0
+
+    @classmethod
+    def add_tokens(cls, token_in: int, token_out: int, cost: float) -> None:
+        TokenCounter.total_in += token_in
+        TokenCounter.total_out += token_out
+        TokenCounter.total_cost += cost
+
+    @classmethod
+    def log_total(cls) -> None:
+        logger.info(f"Total token in: {TokenCounter.total_in}, total token out: {TokenCounter.total_out}, total cost: {TokenCounter.total_cost}")
+
 
 def append_token_usage(token_in, token_out, model, file_name):
 
@@ -264,6 +279,9 @@ def append_token_usage(token_in, token_out, model, file_name):
     if "gpt-4-turbo-2024-04-09" in model:
         cost_in = token_in * 10 / 1e6
         cost_out = token_out * 30 / 1e6
+    elif "gpt-4o-mini-2024-07-18" in model:
+        cost_in = token_in * 0.15 / 1e6
+        cost_out = token_out * 0.6 / 1e6
     else:
         raise ValueError(f"Model {model} not supported")
 
@@ -274,6 +292,8 @@ def append_token_usage(token_in, token_out, model, file_name):
         "cost_out": cost_out,
         "total_cost": cost_in + cost_out,
     }
+    TokenCounter.add_tokens(token_in, token_out, cost_in + cost_out)
+    TokenCounter.log_total()
 
     # Check if file exists and is not empty
     if os.path.isfile(file_path) and os.path.getsize(file_path) > 0:

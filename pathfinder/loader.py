@@ -19,11 +19,11 @@ from .model import Model
 
 
 def get_api_model(name, seed, backend_name):
+    if "z-gpt" in name.lower() or backend_name.lower() == "azure":
+        return AzureOpenAIAPI(name, seed)
     if backend_name.lower() == "openrouter" or "openrouter" in name.lower():
         name = name.replace("openrouter-", "")
         return OpenRouter(name, seed)
-    if "z-gpt" in name.lower():
-        return AzureOpenAIAPI(name, seed)
     if "gpt" in name.lower():
         return OpenAIAPI(name, seed)
     elif "mistral" in name.lower():
