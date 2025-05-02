@@ -84,7 +84,7 @@ class ModelAPI(PathFinder):
             r += r")"
         return self.run(self, r, value.name, False, False)
 
-    def request_api(self, chat, tmeperature, top_p, max_tokens):
+    def request_api(self, chat, temperature, top_p, max_tokens):
         raise NotImplementedError
 
     def run_find(self, lm, r, name):
@@ -186,7 +186,7 @@ class OpenAIAPI(ModelAPI):
 
         self.client = OpenAI()
 
-    def request_api(self, chat, tmeperature, top_p, max_tokens):
+    def request_api(self, chat, temperature, top_p, max_tokens):
         import openai
 
         @backoff.on_exception(backoff.expo, openai.RateLimitError)
@@ -196,7 +196,7 @@ class OpenAIAPI(ModelAPI):
         out = completions_with_backoff(
             model=self.model_name,
             messages=chat,
-            temperature=tmeperature,
+            temperature=temperature,
             top_p=top_p,
             seed=self.seed,
             max_tokens=max_tokens,
@@ -216,7 +216,7 @@ class OpenRouter(ModelAPI):
             api_key=getenv(API_KEYS.pop(0)),
         )
 
-    def request_api(self, chat, tmeperature, top_p, max_tokens):
+    def request_api(self, chat, temperature, top_p, max_tokens):
         import openai
         @backoff.on_exception(backoff.expo, openai.RateLimitError)
         def completions_with_backoff(**kwargs):
@@ -237,7 +237,7 @@ class OpenRouter(ModelAPI):
         out = completions_with_backoff(
             model=self.model_name,
             messages=chat,
-            temperature=tmeperature,
+            temperature=temperature,
             top_p=top_p,
             seed=self.seed,
             max_tokens=max_tokens,
@@ -261,6 +261,8 @@ class TokenCounter:
         TokenCounter.total_in += token_in
         TokenCounter.total_out += token_out
         TokenCounter.total_cost += cost
+        if TokenCounter.total_cost > 2:
+            raise AssertionError("API cost exceeded limit.")
 
     @classmethod
     def log_total(cls) -> None:
@@ -282,6 +284,9 @@ def append_token_usage(token_in, token_out, model, file_name):
     elif "gpt-4o-mini-2024-07-18" in model:
         cost_in = token_in * 0.15 / 1e6
         cost_out = token_out * 0.6 / 1e6
+    elif "gpt-o3-mini-2025-01-31" in model:
+        cost_in = token_in * 1.1 / 1e6
+        cost_out = token_out * 4.4 / 1e6
     else:
         raise ValueError(f"Model {model} not supported")
 
@@ -323,31 +328,45 @@ class AzureOpenAIAPI(ModelAPI):
         self.client = AzureOpenAI()
         self.random_name = str(uuid.uuid4())
 
-    def request_api(self, chat, tmeperature, top_p, max_tokens):
+    def request_api(self, chat, temperature, top_p, max_tokens):
         import openai
 
         @backoff.on_exception(backoff.expo, openai.RateLimitError)
         def completions_with_backoff(**kwargs):
             return self.client.chat.completions.create(**kwargs)
+        if self.model_name == "z-gpt-o3-mini-2025-01-31":
+            generation_args = {"max_completion_tokens": max_tokens}
+        else:
+            generation_args = {"temperature": temperature, "max_tokens": max_tokens}
+        max_retries = 2
+        retries = 0
+        while True:
+            try:
+                out = completions_with_backoff(
+                    model=self.model_name,
+                    messages=chat,
+                    top_p=top_p,
+                    seed=self.seed,
+                    **generation_args,
+                )
+                logger.info(f"OpenAI system_fingerprint: {out.system_fingerprint}")
 
-        out = completions_with_backoff(
-            model=self.model_name,
-            messages=chat,
-            temperature=tmeperature,
-            top_p=top_p,
-            seed=self.seed,
-            max_tokens=max_tokens,
-        )
-        logger.info(f"OpenAI system_fingerprint: {out.system_fingerprint}")
+                self.token_in = out.usage.prompt_tokens
+                self.token_out = out.usage.completion_tokens
 
-        self.token_in = out.usage.prompt_tokens
-        self.token_out = out.usage.completion_tokens
+                append_token_usage(
+                    self.token_in, self.token_out, self.model_name, self.random_name
+                )
 
-        append_token_usage(
-            self.token_in, self.token_out, self.model_name, self.random_name
-        )
+                res = out.choices[0].message.content
+                if retries == max_retries or res is not None:
+                    break
+            except openai.BadRequestError as e:
+                logger.warning(e)
+            retries += 1
 
-        return out.choices[0].message.content, ""
+
+        return res, ""
 
 
 import os
@@ -391,7 +410,7 @@ class MistralAPI(ModelAPI):
             transport=HTTPTransport(retries=self.client._max_retries),
         )
 
-    def request_api(self, chat, tmeperature, top_p, max_tokens):
+    def request_api(self, chat, temperature, top_p, max_tokens):
         from mistralai.exceptions import MistralException
 
         @backoff.on_exception(backoff.expo, MistralException)
@@ -411,7 +430,7 @@ class MistralAPI(ModelAPI):
         out = completions_with_backoff(
             model=self.model_name,
             messages=chat_mistral,
-            temperature=tmeperature,
+            temperature=temperature,
             top_p=top_p,
             random_seed=self.seed,
             max_tokens=max_tokens,
@@ -426,7 +445,7 @@ class AnthropicAPI(ModelAPI):
 
         self.client = Anthropic()
 
-    def request_api(self, chat, tmeperature, top_p, max_tokens):
+    def request_api(self, chat, temperature, top_p, max_tokens):
         from anthropic._exceptions import APIStatusError
 
         @backoff.on_exception(backoff.expo, APIStatusError)
@@ -441,7 +460,7 @@ class AnthropicAPI(ModelAPI):
         out = completions_with_backoff(
             model=self.model_name,
             messages=chat,
-            temperature=tmeperature,
+            temperature=temperature,
             top_p=top_p,
             max_tokens=max_tokens,
         )
