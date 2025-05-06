@@ -13,6 +13,7 @@ from .chat import (
     MixtralInstruct,
     Model,
     Phi3,
+    Qwen,
     Vicuna,
 )
 from .model import Model
@@ -66,6 +67,8 @@ def get_model(name, is_api=False, seed=42, backend_name="transformers"):
         cls = MixtralInstruct
     elif "mathstral" in name.lower():
         cls = MistralInstruct
+    elif "qwen3" in name.lower():
+        cls = Qwen
     elif "hermes-2-mixtral" in name.lower() or "qwen" in name.lower():
         cls = ChatML
     elif "deepseek" in name.lower():

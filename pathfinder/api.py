@@ -204,6 +204,7 @@ class OpenAIAPI(ModelAPI):
         logger.info(f"OpenAI system_fingerprint: {out.system_fingerprint}")
         return out.choices[0].message.content, ""
 
+import uuid
 API_KEYS = ["OPENROUTER_API_KEY", "OPENROUTER_API_KEY_1", "OPENROUTER_API_KEY_2", "OPENROUTER_API_KEY_3"]
 
 class OpenRouter(ModelAPI):
@@ -215,6 +216,7 @@ class OpenRouter(ModelAPI):
             base_url="https://openrouter.ai/api/v1",
             api_key=getenv(API_KEYS.pop(0)),
         )
+        self.random_name = str(uuid.uuid4())
 
     def request_api(self, chat, temperature, top_p, max_tokens):
         import openai
@@ -243,6 +245,9 @@ class OpenRouter(ModelAPI):
             max_tokens=max_tokens,
         )
         logger.info(f"OpenAI system_fingerprint: {out.system_fingerprint}")
+        token_in = out.usage.prompt_tokens
+        token_out = out.usage.completion_tokens
+        append_token_usage(token_in, token_out, self.model_name, self.random_name, openrouter=True)
         content = out.choices[0].message.content
         reasoning = out.choices[0].message.reasoning if hasattr(out.choices[0].message, "reasoning") else "" 
         return content, reasoning
@@ -269,12 +274,17 @@ class TokenCounter:
         logger.info(f"Total token in: {TokenCounter.total_in}, total token out: {TokenCounter.total_out}, total cost: {TokenCounter.total_cost}")
 
 
-def append_token_usage(token_in, token_out, model, file_name):
+def append_token_usage(token_in, token_out, model, file_name, openrouter=False):
 
     # Create a dictionary to append
-    file_path = os.path.join(
-        os.path.dirname(os.path.abspath(__file__)), "..", "..", "api_usage"
-    )
+    if openrouter:
+        file_path = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "..", "..", "api_usage_openrouter"
+        )
+    else:
+        file_path = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "..", "..", "api_usage"
+        )
     os.makedirs(file_path, exist_ok=True)
     file_path = os.path.join(file_path, f"{file_name}.json")
 
@@ -284,9 +294,21 @@ def append_token_usage(token_in, token_out, model, file_name):
     elif "gpt-4o-mini-2024-07-18" in model:
         cost_in = token_in * 0.15 / 1e6
         cost_out = token_out * 0.6 / 1e6
+    elif "z-gpt-4o-2024-08-0" in model:
+        cost_in = token_in * 2.5 / 1e6
+        cost_out = token_out * 10 / 1e6
     elif "gpt-o3-mini-2025-01-31" in model:
         cost_in = token_in * 1.1 / 1e6
         cost_out = token_out * 4.4 / 1e6
+    elif "deepseek/deepseek-chat-v3-0324" in model:
+        cost_in = token_in * 0.27 / 1e6
+        cost_out = token_out * 1.1 / 1e6
+    elif "deepseek/deepseek-r1" in model:
+        cost_in = token_in * 0.5 / 1e6
+        cost_out = token_out * 2.18 / 1e6
+    elif "google/gemini-2.5-flash-preview" in model:
+        cost_in = token_in * 0.15 / 1e6
+        cost_out = token_out * 0.6 / 1e6  
     else:
         raise ValueError(f"Model {model} not supported")
 
@@ -317,7 +339,6 @@ def append_token_usage(token_in, token_out, model, file_name):
             json.dump([new_entry], file, indent=4)
 
 
-import uuid
 
 
 class AzureOpenAIAPI(ModelAPI):
