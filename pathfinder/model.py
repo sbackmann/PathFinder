@@ -103,7 +103,7 @@ class Model(PathFinder):
                 and self.chat[-1]["content"] == ""
                 else self.chat
             )  # prevent empty assistant block to be passed to the tokenizer
-
+            print(tmp_chat)
             prompt_render = self.tokenizer.apply_chat_template(
                 tmp_chat,
                 tokenize=False,
@@ -154,7 +154,8 @@ class Model(PathFinder):
                 }
             ),
         )
-
+        print(generation_config)
+        print("generate...")
         output = self.model.generate(
             inputs=input_ids,
             generation_config=generation_config,
@@ -172,7 +173,7 @@ class Model(PathFinder):
                 else None
             ),
         )
-
+        print("Done generating...")
         res = self.tokenizer.decode(
             output[0][input_ids.shape[1] :], skip_special_tokens=False
         )

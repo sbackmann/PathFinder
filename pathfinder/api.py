@@ -245,9 +245,12 @@ class OpenRouter(ModelAPI):
             max_tokens=max_tokens,
         )
         logger.info(f"OpenAI system_fingerprint: {out.system_fingerprint}")
-        token_in = out.usage.prompt_tokens
-        token_out = out.usage.completion_tokens
-        append_token_usage(token_in, token_out, self.model_name, self.random_name, openrouter=True)
+        if out.usage is not None:
+            token_in = out.usage.prompt_tokens
+            token_out = out.usage.completion_tokens
+            append_token_usage(token_in, token_out, self.model_name, self.random_name, openrouter=True)
+        else:
+            logger.warning("out.usage was None.")
         content = out.choices[0].message.content
         reasoning = out.choices[0].message.reasoning if hasattr(out.choices[0].message, "reasoning") else "" 
         return content, reasoning
@@ -300,19 +303,35 @@ def append_token_usage(token_in, token_out, model, file_name, openrouter=False):
     elif "gpt-o3-mini-2025-01-31" in model:
         cost_in = token_in * 1.1 / 1e6
         cost_out = token_out * 4.4 / 1e6
+    elif "z-gpt-o4-mini-2025-04-16" in model:
+        cost_in = token_in * 1.1 / 1e6
+        cost_out = token_out * 4.4 / 1e6
     elif "deepseek/deepseek-chat-v3-0324" in model:
         cost_in = token_in * 0.27 / 1e6
         cost_out = token_out * 1.1 / 1e6
     elif "deepseek/deepseek-r1" in model:
         cost_in = token_in * 0.5 / 1e6
         cost_out = token_out * 2.18 / 1e6
+    elif "google/gemini-2.5-flash-preview:thinking" in model:
+        cost_in = token_in * 0.15 / 1e6
+        cost_out = token_out * 3.5 / 1e6
     elif "google/gemini-2.5-flash-preview" in model:
         cost_in = token_in * 0.15 / 1e6
-        cost_out = token_out * 0.6 / 1e6  
+        cost_out = token_out * 0.6 / 1e6
+    elif "qwen/qwen3-235b-a22b" in model:
+        cost_in = token_in * 0.1 / 1e6
+        cost_out = token_out * 0.1 / 1e6
+    elif "anthropic/claude-3.7-sonnet" in model:
+        cost_in = token_in * 3 / 1e6
+        cost_out = token_out * 15 / 1e6
+    elif "meta-llama/llama-3.3-70b-instruct" in model:
+        cost_in = token_in * 0.1 / 1e6
+        cost_out = token_out * 0.25 / 1e6
     else:
         raise ValueError(f"Model {model} not supported")
 
     new_entry = {
+        "model": model,
         "token_in": token_in,
         "token_out": token_out,
         "cost_in": cost_in,
@@ -355,7 +374,7 @@ class AzureOpenAIAPI(ModelAPI):
         @backoff.on_exception(backoff.expo, openai.RateLimitError)
         def completions_with_backoff(**kwargs):
             return self.client.chat.completions.create(**kwargs)
-        if self.model_name == "z-gpt-o3-mini-2025-01-31":
+        if self.model_name == "z-gpt-o3-mini-2025-01-31" or self.model_name == "z-gpt-o4-mini-2025-04-16":
             generation_args = {"max_completion_tokens": max_tokens}
         else:
             generation_args = {"temperature": temperature, "max_tokens": max_tokens}
