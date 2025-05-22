@@ -205,7 +205,7 @@ class OpenAIAPI(ModelAPI):
         return out.choices[0].message.content, ""
 
 import uuid
-API_KEYS = ["OPENROUTER_API_KEY", "OPENROUTER_API_KEY_1", "OPENROUTER_API_KEY_2", "OPENROUTER_API_KEY_3"]
+API_KEYS = ["OPENROUTER_API_KEY"]#, "OPENROUTER_API_KEY_1", "OPENROUTER_API_KEY_2", "OPENROUTER_API_KEY_3"]
 
 class OpenRouter(ModelAPI):
     def __init__(self, model_name, seed):
@@ -214,7 +214,7 @@ class OpenRouter(ModelAPI):
 
         self.client = OpenAI(
             base_url="https://openrouter.ai/api/v1",
-            api_key=getenv(API_KEYS.pop(0)),
+            api_key=getenv(API_KEYS[0]),#.pop(0)),
         )
         self.random_name = str(uuid.uuid4())
 
@@ -298,6 +298,9 @@ def append_token_usage(token_in, token_out, model, file_name, openrouter=False):
         cost_in = token_in * 0.15 / 1e6
         cost_out = token_out * 0.6 / 1e6
     elif "z-gpt-4o-2024-08-0" in model:
+        cost_in = token_in * 2.5 / 1e6
+        cost_out = token_out * 10 / 1e6
+    elif "openai/gpt-4o-2024-08-06" in model:
         cost_in = token_in * 2.5 / 1e6
         cost_out = token_out * 10 / 1e6
     elif "gpt-o3-mini-2025-01-31" in model:
