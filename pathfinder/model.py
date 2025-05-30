@@ -154,8 +154,7 @@ class Model(PathFinder):
                 }
             ),
         )
-        print(generation_config)
-        print("generate...")
+
         output = self.model.generate(
             inputs=input_ids,
             generation_config=generation_config,
@@ -173,7 +172,6 @@ class Model(PathFinder):
                 else None
             ),
         )
-        print("Done generating...")
         res = self.tokenizer.decode(
             output[0][input_ids.shape[1] :], skip_special_tokens=False
         )
