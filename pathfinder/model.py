@@ -103,7 +103,6 @@ class Model(PathFinder):
                 and self.chat[-1]["content"] == ""
                 else self.chat
             )  # prevent empty assistant block to be passed to the tokenizer
-            print(tmp_chat)
             prompt_render = self.tokenizer.apply_chat_template(
                 tmp_chat,
                 tokenize=False,
