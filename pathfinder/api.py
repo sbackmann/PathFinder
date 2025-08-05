@@ -321,15 +321,24 @@ def append_token_usage(token_in, token_out, model, file_name, openrouter=False):
     elif "google/gemini-2.5-flash-preview" in model:
         cost_in = token_in * 0.15 / 1e6
         cost_out = token_out * 0.6 / 1e6
+    elif "google/gemini-2.0-flash-001" in model:
+        cost_in = token_in * 0.1 / 1e6
+        cost_out = token_out * 0.4 / 1e6
     elif "qwen/qwen3-235b-a22b" in model:
         cost_in = token_in * 0.1 / 1e6
         cost_out = token_out * 0.1 / 1e6
+    elif "qwen/qwen3-32b" in model:
+        cost_in = token_in * 0.1 / 1e6
+        cost_out = token_out * 0.3 / 1e6
     elif "anthropic/claude-3.7-sonnet" in model:
         cost_in = token_in * 3 / 1e6
         cost_out = token_out * 15 / 1e6
     elif "meta-llama/llama-3.3-70b-instruct" in model:
         cost_in = token_in * 0.1 / 1e6
         cost_out = token_out * 0.25 / 1e6
+    elif "x-ai/grok-3-mini" in model:
+        cost_in = token_in * 0.3 / 1e6
+        cost_out = token_out * 0.5 / 1e6
     else:
         raise ValueError(f"Model {model} not supported")
 
